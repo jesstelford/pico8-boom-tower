@@ -1,17 +1,21 @@
 menuitem(1, "debug", function() debugger.expand(true) end)
 
+-- disable button repeat
+poke(0x5f5c, 255)
+
 function _init()
   init_dbg()
 end
 
 gravity = 0.4
-jerky = 3
+jerky = 4.5
 
 inputax = 0.2
 inputay = 0.8
 
 airdragx = 0.1
-airdragy = 0.4
+platformdragx = 0.4
+gravity = 0.4
 grounddragx = 0.3
 grounddragy = 0
 
@@ -21,12 +25,14 @@ pay = 0
 pvx = 0
 pvy = 0
 maxvx = 5
-maxvy = 5
+maxvy = 15
 
 px = 10
-py = 62 * 8
+py = 63 * 8
 
-jumping = false
+sprh = 16
+sprw = 8
+
 coll = false
 
 function _update60()
@@ -37,8 +43,13 @@ function _update60()
   else if (btn(1)) then
     pax = inputax
   else
+    if (coll) then
+      dragx = platformdragx
+    else
+      dragx = airdragx
+    end
     -- Horizontal velocity always degrades in the opposite direction of motion
-    pax = -sgn(pvx) * min(airdragx, abs(pvx))
+    pax = -sgn(pvx) * min(dragx, abs(pvx))
   end end
 
   -- TODO: Add a jerk (change in acceleration) while jump is held.
@@ -48,57 +59,51 @@ function _update60()
   -- as the jerk decays, the acceleration reaches zero, so the velocity slows
   -- down, resulting in the the player falling back in the direction of
   -- gravity.
-  if (btn(2)) then
-    if (coll) then
-      jumping = true
-    end
-
-    if (jumping) then
-      pay = -inputay
-    else
-      pay = 0
-    end
+  if (btnp(2)) then
+    pay = -max(jerky, abs(pvx) * 1.5)
   else
-    jumping = false
-    -- Vertical velocity always degrades downwards
-    pay = 0
+    -- Vertical velocity always degrades in the downward direction
+    pay = gravity
   end
 
   pvx = mid(-maxvx, pvx + pax, maxvx)
-  pvy = mid(-maxvy, pvy + pay + airdragy, maxvy)
-
-  if (abs(pvy) == maxvy) then
-    -- Can't jump past max velocity
-    jumping = false
-  end
+  pvy = mid(-maxvy, pvy + pay, maxvy)
 
   px += pvx
   py += pvy
 
-  if (px < 0 or px > 15 * 8) then
+  coll = false
+
+  -- Use map data to check for collision with platforms
+  mapy = flr(py / 8)
+  for mapx = flr(px / 8), flr((px + sprw) / 8) do
+    mapspr = mget(mapx, mapy)
+    isplatform = fget(mapspr, 0)
+
+    if (isplatform and pvy > 0) then
+      coll = true
+      py = py - (py % 8) + 1
+      pvy = 0
+    end
+  end
+
+  -- Collision with walls
+  if (px < 2 or px > 126 - sprw) then
     -- Hitting the wall adds a bit more drag
     pvx -= sgn(pvx) * min(airdragx, abs(pvx))
     pvx = pvx * -1
     px = mid(0, px, 15 * 8)
   end
-
-  if (py >= 62 * 8) then
-    py = 62 * 8
-    pvy = 0
-    coll = true
-  else
-    coll = false
-  end
 end
 
 -- Dump to the terminal
-printTable({ pay, pvy }, true)
+--printTable({ pay, pvy }, true)
 
 function _draw()
   cls(0)
   camera(0, (64 - 16) * 8)
   map(0, 0, 0, 0, 128, 64)
-  spr(16, px, py, 1, 2)
+  spr(16, px, py - sprh, 1, 2)
   print("pico-8 starter project", 10, 10, 7)
   print("by jess telford", 10, 20, 7)
   debugger.draw()
