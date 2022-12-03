@@ -15,8 +15,8 @@
 ```
 .
 ├── README.md     This file
-├── main.p8       The main cart entry point
-├── main.lua      The code for your game, included by main.p8
+├── main.p8       Cart entry point, includes sprites, map, audio
+├── main.lua      The game code, included by main.p8
 ├── debugger.lua  Useful debugging methods
 └── *.sh          Various scripts (see below)
 ```
