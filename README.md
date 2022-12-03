@@ -1,4 +1,14 @@
-# PICO-8 Starter Project
+<div align="center">
+  <br>
+  <h1>Icy 8</h1>
+  <p>
+    <b>A <a href="https://www.lexaloffle.com/pico-8.php">PICO-8</a> demake of <a href="https://en.wikipedia.org/wiki/Icy_Tower">Icy Tower</a>.</b><br />
+  <sup>(Original by <a href="https://johanpeitz.com/">Johan Peitz</a>)</sup>
+  </p>
+  <br>
+  <br>
+  <img src="./assets/icy-8-demo.gif" atl="8 second gameplay recording of a small blue-hatted character jumping onto platforms, falling down, then jumping up again" />
+</div>
 
 ## Files
 
