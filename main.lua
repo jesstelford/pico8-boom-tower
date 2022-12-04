@@ -31,6 +31,16 @@ py = 63 * 8
 sprh = 16
 sprw = 8
 
+camy = 512 -- Bottom of the map
+camh = 128
+
+scrollthreshold = camh * 0.75
+scrollsize = camh - scrollthreshold
+
+scollspeed = 0
+scrollpushforce = 3
+maxscrollspeed = 40
+
 coll = false
 
 function _update60()
@@ -70,18 +80,35 @@ function _update60()
   px += pvx
   py += pvy
 
+  rely = camy - py
+
+  -- Fallen through bottom of the screen
+  if (rely < 0) then
+    gameover = true
+  end
+
+  scrollforce = mid(
+    scrollspeed,
+    ((rely - scrollthreshold) / scrollsize) * scrollpushforce,
+    maxscrollspeed
+  )
+
+  camy -= scrollforce
+
   coll = false
 
   -- Use map data to check for collision with platforms
-  mapy = flr(py / 8)
-  for mapx = flr(px / 8), flr((px + sprw) / 8) do
-    mapspr = mget(mapx, mapy)
-    isplatform = fget(mapspr, 0)
+  if (pvy > 0) then
+    mapy = flr(py / 8)
+    for mapx = flr(px / 8), flr((px + sprw) / 8) do
+      mapspr = mget(mapx, mapy)
+      isplatform = fget(mapspr, 0)
 
-    if (isplatform and pvy > 0) then
-      coll = true
-      py = py - (py % 8) + 1
-      pvy = 0
+      if (isplatform) then
+        coll = true
+        py = py - (py % 8) + 1
+        pvy = 0
+      end
     end
   end
 
@@ -99,7 +126,7 @@ end
 
 function _draw()
   cls(0)
-  camera(0, (64 - 16) * 8)
+  camera(0, camy - camh)
   map(0, 0, 0, 0, 128, 64)
   spr(16, px, py - sprh, 1, 2)
   debugger.draw()
