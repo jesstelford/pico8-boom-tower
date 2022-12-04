@@ -40,6 +40,8 @@ maxscrollspeed = 40
 coll = false
 gameover = false
 
+highestlevel = 0
+
 function _init()
   init_dbg()
 end
@@ -114,9 +116,12 @@ function _update60()
         isplatform = fget(mapspr, 0)
 
         if (isplatform) then
+          -- This is a hacky calculation. Can the levels themsleves hold this
+          -- information?
           coll = true
           py = py - (py % 8) + 1
           pvy = 0
+          highestlevel = flr((camystart - py) / 8) / 3
         end
       end
     end
@@ -134,8 +139,12 @@ end
 -- Dump to the terminal
 --printTable({ pay, pvy }, true)
 
-function text(str, x, y, col, shadow, align)
-  width = print(str, 1000, 0) - 1000
+function textwidth(str)
+  return print(str, 1000, 0) - 1000
+end
+
+function text(str, x, y, col, shadow, outline, align)
+  width = textwidth(str)
   if (align == 'right') then
     x -= width
   else if (align == 'center') then
@@ -144,7 +153,7 @@ function text(str, x, y, col, shadow, align)
 
   for yout = y - 1, y + 2 do
     for xout = x - 1, x + 1 do
-      print(str, xout, yout, 0)
+      print(str, xout, yout, outline)
     end
   end
   print(str, x, y + 1, shadow)
@@ -154,11 +163,28 @@ end
 function _draw()
   cls(0)
   camera(0, camy - camh)
+  text("icy 8", 64, camystart - 115, 14, 2, 0, 'center')
   map(0, 0, 0, 0, 128, 64)
   spr(16, px, py - sprh, 1, 2)
   camera(0, 0)
   if (gameover) then
-    text("game over", 64, 60, 7, 13, 'center')
+    score = highestlevel * 10
+    colwidth = max(textwidth("level "), textwidth(" "..tostr(score)))
+    leftcol = 64 - colwidth
+    rightcol = 64 + colwidth
+
+    texty = 50
+
+    rectfill(0, texty + 1, 128, texty + 25, 13)
+    rectfill(0, texty + 2, 128, texty + 24, 1)
+
+    text("game over", 64, texty, 8, 2, 0, 'center')
+
+    text("level", leftcol, texty + 12, 12, 1, 0, 'left')
+    text(tostr(highestlevel), rightcol, texty + 12, 12, 1, 0, 'right')
+
+    text("score", leftcol, texty + 21, 10, 4, 0, 'left')
+    text(tostr(score), rightcol, texty + 21, 10, 4, 0, 'right')
   end
   --debugger.draw()
   --sdbg()
