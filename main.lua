@@ -7,15 +7,13 @@ function _init()
   init_dbg()
 end
 
-gravity = 0.4
-jerky = 4.5
+gravity = 0.2
+jerky = 3.5
 
-inputax = 0.2
-inputay = 0.8
+inputax = 0.1
 
 airdragx = 0.1
 platformdragx = 0.4
-gravity = 0.4
 grounddragx = 0.3
 grounddragy = 0
 
@@ -25,7 +23,7 @@ pay = 0
 pvx = 0
 pvy = 0
 maxvx = 5
-maxvy = 15
+maxvy = 10
 
 px = 10
 py = 63 * 8
@@ -59,7 +57,7 @@ function _update60()
   -- as the jerk decays, the acceleration reaches zero, so the velocity slows
   -- down, resulting in the the player falling back in the direction of
   -- gravity.
-  if (btnp(2)) then
+  if (btn(2) and coll) then
     pay = -max(jerky, abs(pvx) * 1.5)
   else
     -- Vertical velocity always degrades in the downward direction
@@ -104,8 +102,6 @@ function _draw()
   camera(0, (64 - 16) * 8)
   map(0, 0, 0, 0, 128, 64)
   spr(16, px, py - sprh, 1, 2)
-  print("pico-8 starter project", 10, 10, 7)
-  print("by jess telford", 10, 20, 7)
   debugger.draw()
   sdbg()
 end
