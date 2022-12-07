@@ -3,7 +3,7 @@ menuitem(1, "debug", function() debugger.expand(true) end)
 -- disable button repeat
 poke(0x5f5c, 255)
 
-gravity = 0.2
+gravity = -0.2
 jerky = 3.5
 
 inputax = 0.1
@@ -21,12 +21,12 @@ maxvx = 5
 maxvy = 10
 
 px = 10
-py = 63 * 8
+py = 17
 
-sprh = 16
-sprw = 8
+ph = 16
+pw = 8
 
-camystart = 512
+camystart = 0
 camy = camystart -- Bottom of the map
 camh = 128
 
@@ -41,6 +41,11 @@ coll = false
 gameover = false
 
 highestlevel = 0
+
+-- NOTE: World coordinates are x-positive right, and y-positive up
+-- So we have to convert back to Screen coordinates when rendering
+mapcellsy = 64
+maph = 8 * 64
 
 function _init()
   init_dbg()
@@ -73,7 +78,7 @@ function _update60()
   -- down, resulting in the the player falling back in the direction of
   -- gravity.
   if (not gameover and btn(2) and coll) then
-    pay = -max(jerky, abs(pvx) * 1.5)
+    pay = max(jerky, abs(pvx) * 1.5)
   else
     -- Vertical velocity always degrades in the downward direction
     pay = gravity
@@ -86,7 +91,7 @@ function _update60()
   py += pvy
 
   if (not gameover) then
-    rely = camy - py
+    rely = py - camy
 
     -- Fallen through bottom of the screen
     if (rely < 0) then
@@ -94,40 +99,48 @@ function _update60()
       coll = false
     end
 
+    -- How fast the screen needs to scroll up
     scrollforce = mid(
       scrollspeed,
+      -- The closer to the top of the screen, the faster the screen has to
+      -- scroll up
       ((rely - scrollthreshold) / scrollsize) * scrollpushforce,
+      -- But only to a maximum
       maxscrollspeed
     )
 
-    camy -= scrollforce
+    camy += scrollforce
 
-    if (scrollspeed == 0 and camy < camystart - scrollsize) then
+    -- Once past a certain point, the screen starts scrolling automatically
+    if (scrollspeed == 0 and camy > scrollsize) then
       scrollspeed = 0.2
     end
 
     coll = false
 
     -- Use map data to check for collision with platforms
-    if (pvy > 0) then
-      mapy = flr(py / 8)
-      for mapx = flr(px / 8), flr((px + sprw) / 8) do
+    -- Only when player is moving downward
+    if (pvy < 0) then
+      mapy = mapcellsy - 1 - flr(py / 8)
+      for mapx = flr(px / 8), flr((px + pw) / 8) do
         mapspr = mget(mapx, mapy)
         isplatform = fget(mapspr, 0)
 
         if (isplatform) then
           -- This is a hacky calculation. Can the levels themsleves hold this
           -- information?
-          coll = true
-          py = py - (py % 8) + 1
+          coll =true
+          -- Move back to the top of the platform
+          py += (8 - (py % 8)) - 1
           pvy = 0
-          highestlevel = flr((camystart - py) / 8) / 3
+          -- Floors are rendered every 3rd map tile, hence the division by 3
+          highestlevel = flr(py / 8) / 3
         end
       end
     end
 
     -- Collision with walls
-    if (px < 2 or px > 126 - sprw) then
+    if (px < 2 or px > 126 - pw) then
       -- Hitting the wall adds a bit more drag
       pvx -= sgn(pvx) * min(airdragx, abs(pvx))
       pvx = pvx * -1
@@ -140,7 +153,7 @@ end
 --printTable({ pay, pvy }, true)
 
 function textwidth(str)
-  return print(str, 1000, 0) - 1000
+  return print(str, 200, 0) - 200
 end
 
 function text(str, x, y, col, shadow, outline, align)
@@ -162,10 +175,10 @@ end
 
 function _draw()
   cls(0)
-  camera(0, camy - camh)
-  text("icy 8", 64, camystart - 115, 14, 2, 0, 'center')
-  map(0, 0, 0, 0, 128, 64)
-  spr(16, px, py - sprh, 1, 2)
+  camera(0, maph - camy - camh)
+  text("icy 8", 64, 115, 14, 2, 0, 'center')
+  map(0, 0, 0, 0, 128, mapcellsy)
+  spr(16, px, maph - py - ph, 1, 2)
   camera(0, 0)
   if (gameover) then
     score = highestlevel * 10
