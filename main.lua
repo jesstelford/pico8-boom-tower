@@ -1,5 +1,22 @@
 menuitem(1, "debug", function() debugger.expand(true) end)
 
+-- Map notes:
+-- We're using the map as a convenient storage space to store the locations of
+-- levels and walls and their associated sprites.
+-- We use 41 y-cells (0-40):
+--  40-9 (16 + 16 = 2 screens)
+--   8-3 (6 = 2 levels for over-jump)
+--   2-0 (3 = 1 level for scroll buffer)
+-- By 48 x-cells (0-47):
+--   0-15 (background)
+--  16-31 (levels)
+--  32-47 (walls/foreground)
+--
+-- Why 2 screens? So we can incrementally add new cells as old cells scroll off
+-- the camera view, then simply render the map at (camy / 8) % 41, instead of
+-- having to do huge copy operations each time a cell moves off the screen to
+-- shift the map down.
+
 -- disable button repeat
 poke(0x5f5c, 255)
 
@@ -44,11 +61,77 @@ highestlevel = 0
 
 -- NOTE: World coordinates are x-positive right, and y-positive up
 -- So we have to convert back to Screen coordinates when rendering
-mapcellsy = 64
-maph = 8 * 64
+mapcellsy = 41
+maph = 8 * mapcellsy
+
+screencellswide = 16
+
+wallcellswide = 1
+
+towercellswide = screencellswide - (2 * wallcellswide)
+
+-- Must be 2 or more
+levelmincellswide = 4
+levelmaxcellswide = ceil(towercellswide / 2)
+
+-- rndup(0,3) == 0
+-- rndup(1,3) == 3
+-- rndup(2,3) == 3
+-- rndup(3,3) == 3
+-- rndup(4,3) == 6
+-- from: https://stackoverflow.com/questions/3407012/rounding-up-to-the-nearest-multiple-of-a-number#comment76735655_4073700
+function rndup(num, factor)
+  local a = num + factor - 1;
+  return a - a % factor;
+end
+
+function generate_levels(worldcelly1, worldcelly2)
+  -- Levels are every 3rd cell, so skip forward to the next cell that is a
+  -- multiple of 3
+  local nextlevelcelly = rndup(worldcelly1, 3)
+
+  if (nextlevelcelly > worldcelly2) then
+    -- Nothing to do
+    return
+  end
+
+  for worldcelly=nextlevelcelly, worldcelly2, 3 do
+    local level = worldcelly / 3
+
+    if (level % 100 == 0) then
+       -- change the type of level
+    end
+
+    local width
+    local levelcellx
+
+    -- Every 50th level is full width
+    if (level % 50 == 0) then
+      width = screencellswide
+      levelcellx = 0
+    else
+      -- otherwise it's a random width & position
+      width = levelmincellswide + flr(rnd(levelmaxcellswide - levelmincellswide  + 1))
+      levelcellx = wallcellswide + flr(rnd(towercellswide - width + 1))
+    end
+
+    -- convert from world coords to map coords
+    local mapy = mapcellsy - worldcelly - 1
+
+    -- draw the ends
+    mset(levelcellx, mapy, 1)
+    mset(levelcellx + width - 1, mapy, 3)
+    -- draw the rest of the level
+    for mapx = levelcellx + 1, levelcellx + width - 2 do
+      mset(mapx, mapy, 2)
+    end
+  end
+end
 
 function _init()
   init_dbg()
+  -- Generate the first 2 screens worth of levels
+  generate_levels(0, 32)
 end
 
 function _update60()
