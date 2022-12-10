@@ -7,23 +7,6 @@ menuitem(1, "debug", function() debugger.expand(true) end)
 -- mc_*: Map cell. PICO8's built-in map.
 -- s_*: Screen pixels. PICO8's built-in display.
 
--- Map notes:
--- We're using the map as a convenient storage space to store the locations of
--- levels and walls and their associated sprites.
--- We use 41 y-cells (0-40):
---  40-9 (16 + 16 = 2 screens)
---   8-3 (6 = 2 levels for over-jump)
---   2-0 (3 = 1 level for scroll buffer)
--- By 48 x-cells (0-47):
---   0-15 (background)
---  16-31 (levels)
---  32-47 (walls/foreground)
---
--- Why 2 screens? So we can incrementally add new cells as old cells scroll off
--- the camera view, then simply render the map at (w_camy / 8) % 41, instead of
--- having to do huge copy operations each time a cell moves off the screen to
--- shift the map down.
-
 -- disable button repeat
 poke(0x5f5c, 255)
 
@@ -55,6 +38,8 @@ wc_pw = w_pw / 8
 w_camy = 0 -- Bottom of the map
 w_camh = 128
 
+wc_lastcamy = 0
+
 w_scrollthreshold = w_camh * 0.75
 w_scrollsize = w_camh - w_scrollthreshold
 
@@ -67,16 +52,65 @@ gameover = false
 
 highestlevel = 0
 
--- NOTE: World coordinates are x-positive right, and y-positive up
--- So we have to convert back to Screen coordinates when rendering
-mc_height = 41
-c_maph = 8 * mc_height
+-- Map notes:
+--
+-- We're using the map as a convenient storage space to store the locations of
+-- levels and walls and their associated sprites.
+-- At all times we're maintaining 1 screens worth of levels + a buffer for high
+-- jumps and fast scroll speeds.
+--
+--                    ┌───────────────┐0
+--       ▲            │               │
+--       │            ├───────────────┤
+--       │            │               │
+--       │            │               │             ▲
+--       │            │               │             │
+--       │            │               │             │
+--       │            │               │     ┌───────┴───────┐
+--       │            │               │     │               │
+--    scratch         │               │     ├───────────────┤
+--     height         ├───────────────┤     │               │
+-- (2x generated  ▲   │    buffer     │     │               │
+--     height)    │   ├───────────────┤     │    render     │
+--       │        │   │           ▲   │     │    window     │
+--       │  generated │           │   │     │               │
+--       │    height  │  rendered │   │     │               │
+--       │        │   │  (screen) │   │     │               │
+--       │        │   │   height  │   │     └───────────────┘
+--       │        │   │           │   │
+--       │        │   │           │   │
+--       ┴        ┴   └───────────┴───┘41
+--
+-- We use 50 y-cells (0-49):
+--   0- 2 (3 = 1 level for scroll buffer)
+--   3- 8 (6 = 2 levels for over-jump)
+--   9-24 (16 = 1 screen)
+--  25-27 (3 = 1 level for scroll buffer)
+--  28-33 (6 = 2 levels for over-jump)
+--  34-49 (16 = 1 screen)
+--
+-- By 48 x-cells (0-47):
+--   0-15 (background)
+--  16-31 (levels)
+--  32-47 (walls/foreground)
+--
+-- Why 2 screens? So we can incrementally add new cells as old cells scroll off
+-- the camera view, then simply render the map at (w_camy / 8) % 41, instead of
+-- having to do huge copy operations each time a cell moves off the screen to
+-- shift the map down.
+mc_screenwidth = 16
+mc_screenheight = 16
 
-wc_screenwidth = 16
+-- 6 for over-jump + 3 for scroll / safety
+mc_windowbuffer = 9
+mc_windowheight = mc_screenheight + mc_windowbuffer
+mc_scratchheight = 2 * mc_windowheight
+
+c_scratchheight = 8 * mc_scratchheight
 
 wc_wallwidth = 1
 
-wc_towerwidth = wc_screenwidth - (2 * wc_wallwidth)
+wc_towerwidth = mc_screenwidth - (2 * wc_wallwidth)
 
 -- Must be 2 or more
 wc_minlevelwidth = 4
@@ -94,6 +128,24 @@ function rndup(num, factor)
 end
 
 function generate_levels(wc_y1, wc_y2)
+  -- zero-out the data
+  -- TODO: Use memcpy or something faster
+  for wc_y=wc_y1, wc_y2 do
+    -- convert from world coords to map coords
+    local mc_y = mc_scratchheight - (wc_y % mc_windowheight) - 1
+
+    -- The first screens-worth of levels render in the bottom half of the
+    -- scratch area. But every screens-worth there-after needs to render in the
+    -- top half of the scratch area, so we adjust it here.
+    if (wc_y >= mc_windowheight) then
+      mc_y -= mc_windowheight
+    end
+
+    for mc_x=0,mc_screenwidth do
+      mset(mc_x, mc_y, 0)
+    end
+  end
+
   -- Levels are every 3rd cell, so skip forward to the next cell that is a
   -- multiple of 3
   local wc_nextlevely = rndup(wc_y1, 3)
@@ -115,7 +167,7 @@ function generate_levels(wc_y1, wc_y2)
 
     -- Every 50th level is full width
     if (level % 50 == 0) then
-      wc_levelwidth = wc_screenwidth
+      wc_levelwidth = mc_screenwidth
       wc_levelx = 0
     else
       -- otherwise it's a random width & position
@@ -124,7 +176,14 @@ function generate_levels(wc_y1, wc_y2)
     end
 
     -- convert from world coords to map coords
-    local mc_y = mc_height - (wc_y % mc_height) - 1
+    local mc_y = mc_scratchheight - (wc_y % mc_windowheight) - 1
+
+    -- The first screens-worth of levels render in the bottom half of the
+    -- scratch area. But every screens-worth there-after needs to render in the
+    -- top half of the scratch area, so we adjust it here.
+    if (wc_y >= mc_windowheight) then
+      mc_y -= mc_windowheight
+    end
 
     -- draw the ends
     mset(wc_levelx, mc_y, 1)
@@ -217,7 +276,7 @@ function _update60()
       local wc_y = flr(w_py / 8)
       local wc_x1 = flr(w_px / 8)
       local wc_x2 = wc_x1 + wc_pw
-      local mc_y = mc_height - 1 - (wc_y % mc_height)
+      local mc_y = mc_scratchheight - 1 - (wc_y % mc_scratchheight)
       for mc_x = wc_x1, wc_x2 do
         mapspr = mget(mc_x, mc_y)
         isplatform = fget(mapspr, 0)
@@ -241,6 +300,31 @@ function _update60()
       w_pvx -= sgn(w_pvx) * min(w_airdragx, abs(w_pvx))
       w_pvx = w_pvx * -1
       w_px = mid(0, w_px, 15 * 8)
+    end
+
+    -- Checking to see if rendering has moved into the top half of our generated
+    -- levels within the map
+    local wc_camy = flr(w_camy / 8)
+    local wc_cellsmoved = wc_camy - wc_lastcamy
+
+    -- The camera has moved up at least one cell
+    if (wc_cellsmoved > 0) then
+      -- First, generate new levels
+      local wc_newlevely1 = wc_lastcamy + mc_windowheight + 1
+      local wc_newlevely2 = wc_newlevely1 + wc_cellsmoved
+      generate_levels(wc_newlevely1, wc_newlevely2)
+
+      -- Next, copy any levels that we've moved past into the correct spots
+      for i=1,wc_cellsmoved do
+        local mc_copytoy = mc_scratchheight - ((wc_lastcamy + i) % mc_windowheight)
+        local mc_copyfromy = mc_copytoy - mc_windowheight
+        -- TODO: use memcpy
+        for mc_x = 0, mc_screenwidth - 1 do
+          mset(mc_x, mc_copytoy, mget(mc_x, mc_copyfromy))
+        end
+      end
+
+      wc_lastcamy = wc_camy
     end
   end
 end
@@ -271,10 +355,10 @@ end
 
 function _draw()
   cls(0)
-  camera(0, c_maph - w_camy - w_camh)
+  camera(0, c_scratchheight - (w_camy % (mc_windowheight * 8)) - w_camh)
   text("icy 8", 64, 115, 14, 2, 0, 'center')
-  map(0, 0, 0, 0, 128, mc_height)
-  spr(16, w_px, c_maph - w_py - w_ph, 1, 2)
+  map(0, 0, 0, 0, mc_screenwidth, mc_scratchheight)
+  spr(16, w_px, c_scratchheight - (w_py % (mc_windowheight * 8)) - w_ph, 1, 2)
   camera(0, 0)
   if (gameover) then
     score = highestlevel * 10
