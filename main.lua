@@ -11,47 +11,47 @@ menuitem(1, "debug", function() debugger.expand(true) end)
 -- disable button repeat
 poke(0x5f5c, 255)
 
-w_gravity = -0.2
-w_jerky = 3.5
+local w_gravity = -0.2
+local w_jerky = 3.5
 
-w_inputax = 0.1
+local w_inputax = 0.1
 
-w_airdragx = 0.1
-w_platformdragx = 0.4
+local w_airdragx = 0.1
+local w_platformdragx = 0.4
 -- TODO
-w_grounddragx = 0.3
+local w_grounddragx = 0.3
 
-w_pax = 0
-w_pay = 0
+local w_pax = 0
+local w_pay = 0
 
-w_pvx = 0
-w_pvy = 0
-w_maxvx = 5
-w_maxvy = 10
+local w_pvx = 0
+local w_pvy = 0
+local w_maxvx = 5
+local w_maxvy = 10
 
-w_px = 10
-w_py = 17
+local w_px = 10
+local w_py = 17
 
-w_ph = 16
-w_pw = 8
-wc_pw = w_pw / 8
+local w_ph = 16
+local w_pw = 8
+local wc_pw = w_pw / 8
 
-w_camy = 0 -- Bottom of the map
-w_camh = 128
+local w_camy = 0 -- Bottom of the map
+local w_camh = 128
 
-wc_lastcamy = 0
+local wc_lastcamy = 0
 
-w_scrollthreshold = w_camh * 0.75
-w_scrollsize = w_camh - w_scrollthreshold
+local w_scrollthreshold = w_camh * 0.75
+local w_scrollsize = w_camh - w_scrollthreshold
 
-w_scrollspeed = 0
-w_scrollpushforce = 3
-w_maxscrollspeed = 40
+local w_scrollspeed = 0
+local w_scrollpushforce = 3
+local w_maxscrollspeed = 40
 
-coll = false
-gameover = false
+local coll = false
+local gameover = false
 
-highestlevel = 0
+local highestlevel = 0
 
 -- Map notes:
 --
@@ -99,23 +99,23 @@ highestlevel = 0
 -- the camera view, then simply render the map at (w_camy / 8) % 41, instead of
 -- having to do huge copy operations each time a cell moves off the screen to
 -- shift the map down.
-mc_screenwidth = 16
-mc_screenheight = 16
+local mc_screenwidth = 16
+local mc_screenheight = 16
 
 -- 6 for over-jump + 3 for scroll / safety
-mc_windowbuffer = 9
-mc_windowheight = mc_screenheight + mc_windowbuffer
-mc_scratchheight = 2 * mc_windowheight
+local mc_windowbuffer = 9
+local mc_windowheight = mc_screenheight + mc_windowbuffer
+local mc_scratchheight = 2 * mc_windowheight
 
-c_scratchheight = 8 * mc_scratchheight
+local c_scratchheight = 8 * mc_scratchheight
 
-wc_wallwidth = 1
+local wc_wallwidth = 1
 
-wc_towerwidth = mc_screenwidth - (2 * wc_wallwidth)
+local wc_towerwidth = mc_screenwidth - (2 * wc_wallwidth)
 
 -- Must be 2 or more
-wc_minlevelwidth = 4
-wc_maxlevelwidth = ceil(wc_towerwidth / 2)
+local wc_minlevelwidth = 4
+local wc_maxlevelwidth = ceil(wc_towerwidth / 2)
 
 -- rndup(0,3) == 0
 -- rndup(1,3) == 3
@@ -123,17 +123,21 @@ wc_maxlevelwidth = ceil(wc_towerwidth / 2)
 -- rndup(3,3) == 3
 -- rndup(4,3) == 6
 -- from: https://stackoverflow.com/questions/3407012/rounding-up-to-the-nearest-multiple-of-a-number#comment76735655_4073700
-function rndup(num, factor)
+local function rndup(num, factor)
   local a = num + factor - 1;
   return a - a % factor;
 end
 
-function generate_levels(wc_y1, wc_y2)
+local function world_cell_to_map_celly(wc_y)
+  return mc_scratchheight - 1 - (wc_y % mc_windowheight)
+end
+
+local function generate_levels(wc_y1, wc_y2)
   -- zero-out the data
   -- TODO: Use memcpy or something faster
   for wc_y=wc_y1, wc_y2 do
     -- convert from world coords to map coords
-    local mc_y = mc_scratchheight - (wc_y % mc_windowheight) - 1
+    local mc_y = world_cell_to_map_celly(wc_y)
 
     -- The first screens-worth of levels render in the bottom half of the
     -- scratch area. But every screens-worth there-after needs to render in the
@@ -177,7 +181,7 @@ function generate_levels(wc_y1, wc_y2)
     end
 
     -- convert from world coords to map coords
-    local mc_y = mc_scratchheight - (wc_y % mc_windowheight) - 1
+    local mc_y = world_cell_to_map_celly(wc_y)
 
     -- The first screens-worth of levels render in the bottom half of the
     -- scratch area. But every screens-worth there-after needs to render in the
@@ -277,10 +281,11 @@ function _update60()
       local wc_y = flr(w_py / 8)
       local wc_x1 = flr(w_px / 8)
       local wc_x2 = wc_x1 + wc_pw
-      local mc_y = mc_scratchheight - 1 - (wc_y % mc_scratchheight)
+      local mc_y = world_cell_to_map_celly(wc_y)
+
       for mc_x = wc_x1, wc_x2 do
-        mapspr = mget(mc_x, mc_y)
-        isplatform = fget(mapspr, 0)
+        local mapspr = mget(mc_x, mc_y)
+        local isplatform = fget(mapspr, 0)
 
         if (isplatform) then
           -- This is a hacky calculation. Can the levels themsleves hold this
@@ -311,17 +316,20 @@ function _update60()
     -- The camera has moved up at least one cell
     if (wc_cellsmoved > 0) then
       -- First, generate new levels
-      local wc_newlevely1 = wc_lastcamy + mc_windowheight + 1
-      local wc_newlevely2 = wc_newlevely1 + wc_cellsmoved
+      local wc_newlevely1 = wc_lastcamy + mc_windowheight
+      local wc_newlevely2 = wc_camy + mc_windowheight - 1
       generate_levels(wc_newlevely1, wc_newlevely2)
 
       -- Next, copy any levels that we've moved past into the correct spots
-      for i=1,wc_cellsmoved do
-        local mc_copytoy = mc_scratchheight - ((wc_lastcamy + i) % mc_windowheight)
-        local mc_copyfromy = mc_copytoy - mc_windowheight
-        -- TODO: use memcpy
-        for mc_x = 0, mc_screenwidth - 1 do
-          mset(mc_x, mc_copytoy, mget(mc_x, mc_copyfromy))
+
+      for wc_y=wc_newlevely1, wc_newlevely2 do
+        -- convert from world coords to map coords
+        local mc_toy = world_cell_to_map_celly(wc_y)
+        local mc_fromy = mc_toy - mc_windowheight
+
+        -- todo: use memcpy
+        for mc_x=0,mc_screenwidth do
+         mset(mc_x, mc_toy, mget(mc_x, mc_fromy))
         end
       end
 
@@ -333,12 +341,12 @@ end
 -- Dump to the terminal
 --printTable({ w_pay, w_pvy }, true)
 
-function textwidth(str)
+local function textwidth(str)
   return print(str, 200, 0) - 200
 end
 
-function text(str, x, y, col, shadow, outline, align)
-  width = textwidth(str)
+local function text(str, x, y, col, shadow, outline, align)
+  local width = textwidth(str)
   if (align == 'right') then
     x -= width
   else if (align == 'center') then
@@ -356,18 +364,19 @@ end
 
 function _draw()
   cls(0)
+  text("icy 8", 64, 128 - 115 + w_camy, 14, 2, 0, 'center')
   camera(0, c_scratchheight - (w_camy % (mc_windowheight * 8)) - w_camh)
-  text("icy 8", 64, 115, 14, 2, 0, 'center')
   map(0, 0, 0, 0, mc_screenwidth, mc_scratchheight)
-  spr(16, w_px, c_scratchheight - (w_py % (mc_windowheight * 8)) - w_ph, 1, 2)
-  camera(0, 0)
-  if (gameover) then
-    score = highestlevel * 10
-    s_colwidth = max(textwidth("level "), textwidth(" "..tostr(score)))
-    s_leftcol = 64 - s_colwidth
-    s_rightcol = 64 + s_colwidth
 
-    s_texty = 50
+  camera(0, 0)
+  spr(16, w_px, 128 - w_py - w_ph + w_camy, 1, 2)
+  if (gameover) then
+    local score = highestlevel * 10
+    local s_colwidth = max(textwidth("level "), textwidth(" "..tostr(score)))
+    local s_leftcol = 64 - s_colwidth
+    local s_rightcol = 64 + s_colwidth
+
+    local s_texty = 50
 
     rectfill(0, s_texty + 1, 128, s_texty + 25, 13)
     rectfill(0, s_texty + 2, 128, s_texty + 24, 1)
