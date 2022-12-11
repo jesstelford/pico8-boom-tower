@@ -1,3 +1,4 @@
+-- vim: set filetype=pico8:
 menuitem(1, "debug", function() debugger.expand(true) end)
 
 -- There are 5 coordinate systems, denoted by variable prefixes:

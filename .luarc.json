@@ -1,0 +1,6 @@
+{
+  "runtime.version": "LuaJIT",
+  "runtime.nonstandardSymbol": ["+=", "-=", "*=", "/=", "%="],
+  "runtime.unicodeName": true,
+  "workspace.library": ["./definitions"]
+}
