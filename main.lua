@@ -369,7 +369,45 @@ function _draw()
   map(0, 0, 0, 0, mc_screenwidth, mc_scratchheight)
 
   camera(0, 0)
+
+  -- there's only ever 6 levels on a screen at a time, so we know that there can
+  -- only be on numbered level at a time (they're every 10th level)
+  local firstvisiblelevel = ceil(w_camy / (8 * 3)) - 1
+  local lastvisiblelevel = flr((w_camy + w_camh - 1) / (8 * 3))
+  local numberedlevel = firstvisiblelevel + 10 - firstvisiblelevel % 10
+  if (firstvisiblelevel > 0 and numberedlevel >= firstvisiblelevel and numberedlevel <= lastvisiblelevel) then
+    local mc_numberedypos = world_cell_to_map_celly(numberedlevel * 3)
+    local c_numberedx1 = 0
+    local c_numberedx2 = 127
+    -- todo: wont work when there's not a numbered level generated in the map yet
+    for mc_x=0,15 do
+      if mget(mc_x, mc_numberedypos) ~= 0 then
+        c_numberedx1 = mc_x * 8
+        for mc_x=mc_x,15 do
+
+          if mget(mc_x, mc_numberedypos) == 0 then
+            c_numberedx2 = (mc_x + 1) * 8 - 1
+            break
+          end
+        end
+        break
+      end
+    end
+
+    text(
+      numberedlevel,
+      c_numberedx1 + flr((c_numberedx2 - c_numberedx1) / 2),
+      128 - 2 - (numberedlevel * 8 * 3) + w_camy,
+      14,
+      2,
+      0,
+      'center'
+    )
+  end
+
+  -- the player sprite
   spr(16, w_px, 128 - w_py - w_ph + w_camy, 1, 2)
+
   if (gameover) then
     local score = highestlevel * 10
     local s_colwidth = max(textwidth("level "), textwidth(" "..tostr(score)))
