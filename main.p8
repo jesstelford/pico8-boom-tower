@@ -1,7 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 38
 __lua__
--- icy 8
+-- boom tower
 -- by jess telford
 #include debugger.lua
 #include main.lua

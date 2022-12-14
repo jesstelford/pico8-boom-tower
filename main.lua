@@ -364,7 +364,7 @@ end
 
 function _draw()
   cls(0)
-  text("icy 8", 64, 128 - 115 + w_camy, 14, 2, 0, 'center')
+  text("boom tower", 64, 128 - 115 + w_camy, 14, 2, 0, 'center')
   camera(0, c_scratchheight - (w_camy % (mc_windowheight * 8)) - w_camh)
   map(0, 0, 0, 0, mc_screenwidth, mc_scratchheight)
 
