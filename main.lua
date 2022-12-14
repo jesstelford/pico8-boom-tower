@@ -33,7 +33,7 @@ local w_px = 10
 local w_py = 17
 
 local w_ph = 16
-local w_pw = 8
+local w_pw = 16 
 local wc_pw = w_pw / 8
 
 local w_camy = 0 -- Bottom of the map
@@ -406,7 +406,7 @@ function _draw()
   end
 
   -- the player sprite
-  spr(16, w_px, 128 - w_py - w_ph + w_camy, 1, 2)
+  spr(4, w_px, 128 - w_py - w_ph + w_camy, 2, 2)
 
   if (gameover) then
     local score = highestlevel * 10
