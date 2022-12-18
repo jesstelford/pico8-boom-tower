@@ -7,6 +7,10 @@ menuitem(1, "debug", function() debugger.expand(true) end)
 -- c_*: Camera. PICO8's built-in camera.
 -- mc_*: Map cell. PICO8's built-in map.
 -- s_*: Screen pixels. PICO8's built-in display.
+--
+-- there's also time variables:
+-- t_*: an absolute time since the game started in seconds
+-- dt_*: a relative time in seconds
 
 -- disable button repeat
 poke(0x5f5c, 255)
@@ -21,19 +25,18 @@ local w_platformdragx = 0.4
 -- TODO
 local w_grounddragx = 0.3
 
-local w_pax = 0
 local w_pay = 0
 
 local w_pvx = 0
 local w_pvy = 0
-local w_maxvx = 5
+local w_maxvx = 3
 local w_maxvy = 10
 
 local w_px = 10
 local w_py = 17
 
 local w_ph = 16
-local w_pw = 16 
+local w_pw = 16
 local wc_pw = w_pw / 8
 
 local w_camy = 0 -- Bottom of the map
@@ -116,6 +119,13 @@ local wc_towerwidth = mc_screenwidth - (2 * wc_wallwidth)
 -- Must be 2 or more
 local wc_minlevelwidth = 4
 local wc_maxlevelwidth = ceil(wc_towerwidth / 2)
+
+local easevx = nil
+
+local last={
+ t_t=t(),
+ dir=0
+}
 
 -- rndup(0,3) == 0
 -- rndup(1,3) == 3
@@ -201,6 +211,71 @@ local function generate_levels(wc_y1, wc_y2)
   end
 end
 
+-- v0 = current value
+-- v1 = target value
+-- t = interpolation % (0-1)
+local function lerp(v0,v1,t)
+ return v0*(1-t)+v1*t
+end
+
+local function easelinear(x)
+ return x
+end
+
+local function easeincubic(x)
+ return x^3
+end
+
+local function easeoutcubic(x)
+ return 1 - (1-x)^3
+end
+
+local function sgn2(v)
+ return v < 0 and -1 or v > 0 and 1 or 0
+end
+
+local msperframe=1000/60
+
+local function framestosec(f)
+ return msperframe*(f/1000)
+end
+
+local function easer(
+ -- see easings.net for fns
+ easefn,
+ -- the current value to ease
+ v,
+ -- desired starting value
+ v0,
+ -- target value
+ v1,
+ -- secs to go from v0 to v1
+ dur
+)
+ -- work backwards from the
+ -- target, using the actual
+ -- current value of vx (not
+ -- the "start" value).
+ local tfrac=(v-v0)/(v1-v0)
+ local step=1/dur
+
+ -- when starting overshot
+ if (tfrac < 0) then
+ -- scale the step when t is
+ -- negative (turning around)
+  step*=(1-tfrac)
+  -- start at the overshot
+  v0=v
+  tfrac=0
+ end
+ 
+ return function(dt)
+  tfrac=min(1,tfrac+dt*step)
+  easedt=easefn(tfrac)
+  return lerp(v0,v1,easedt)
+ end
+end
+
 function _init()
   init_dbg()
   -- Generate the first 2 screens worth of levels
@@ -210,38 +285,65 @@ end
 function _update60()
   if (debugger.expand()) then return end
 
-  if (not gameover) then
-    if (btn(0)) then
-      w_pax = -w_inputax
-    else if (btn(1)) then
-      w_pax = w_inputax
-    else
-      local w_dragx
-      if (coll) then
-        w_dragx = w_platformdragx
-      else
-        w_dragx = w_airdragx
-      end
-      -- Horizontal velocity always degrades in the opposite direction of motion
-      w_pax = -sgn(w_pvx) * min(w_dragx, abs(w_pvx))
-    end end
-  end
+  local dt_t=t()-last.t_t
 
-  -- TODO: Add a jerk (change in acceleration) while jump is held.
-  -- The jerk needs to decay while jump is held.
-  -- There's a constant gravity acting on the acceleration.
-  -- Therefore: The increase in acceleration initially cannot be overcome, but
-  -- as the jerk decays, the acceleration reaches zero, so the velocity slows
-  -- down, resulting in the the player falling back in the direction of
-  -- gravity.
-  if (not gameover and btn(2) and coll) then
-    w_pay = max(w_jerky, abs(w_pvx) * 1.5)
+  local dir = 0
+
+  -- Horizontal velocity always degrades in the opposite direction of motion
+  local w_dragx
+  if (coll) then
+    w_dragx = w_platformdragx
   else
-    -- Vertical velocity always degrades in the downward direction
-    w_pay = w_gravity
+    w_dragx = w_airdragx
   end
 
-  w_pvx = mid(-w_maxvx, w_pvx + w_pax, w_maxvx)
+  -- Vertical velocity always degrades in the downward direction
+  w_pay = w_gravity
+
+  if (not gameover) then
+    dir = btn(⬅️) and -1 or btn(➡️) and 1 or 0
+
+    -- TODO: Add a jerk (change in acceleration) while jump is held.
+    -- The jerk needs to decay while jump is held.
+    -- There's a constant gravity acting on the acceleration.
+    -- Therefore: The increase in acceleration initially cannot be overcome, but
+    -- as the jerk decays, the acceleration reaches zero, so the velocity slows
+    -- down, resulting in the the player falling back in the direction of
+    -- gravity.
+    if (btnp(❎) and coll) then
+      w_pay = max(w_jerky, abs(w_pvx) * 1.5)
+    end
+  end
+
+  if (dir==0) then
+    if (last.dir~=0) then
+      -- start decelerating
+      easevx = easer(
+        easelinear,
+        w_pvx,
+        w_maxvx*last.dir,
+        0,
+        framestosec(4)
+      )
+    end
+  else
+    if (dir~=last.dir) then
+      -- start accelerating, or
+      -- changed direction ⬅️/➡️
+      easevx = easer(
+        easelinear,
+        w_pvx,
+        0,
+        w_maxvx*dir,
+        framestosec(8)
+      )
+    end
+  end
+
+  if (easevx) then
+    w_pvx=easevx(dt_t)
+  end
+
   w_pvy = mid(-w_maxvy, w_pvy + w_pay, w_maxvy)
 
   w_px += w_pvx
@@ -301,11 +403,13 @@ function _update60()
     end
 
     -- Collision with walls
+    -- todo: project forward to see if we'd collide with the wall at the given
+    -- velocity / acceleration, then check if that's within some threshold. if
+    -- so, set t_wall_impact_at to the projected time, and also flag which way
+    -- the wall is facing; we'll use that info later to figure out how the boom
+    -- jump will work
     if (w_px < 2 or w_px > 126 - w_pw) then
-      -- Hitting the wall adds a bit more drag
-      w_pvx -= sgn(w_pvx) * min(w_airdragx, abs(w_pvx))
-      w_pvx = w_pvx * -1
-      w_px = mid(0, w_px, 15 * 8)
+      w_px = mid(2, w_px, 126 - w_pw)
     end
 
     -- Checking to see if rendering has moved into the top half of our generated
@@ -336,6 +440,9 @@ function _update60()
       wc_lastcamy = wc_camy
     end
   end
+
+  last.t_t=t()
+  last.dir=dir
 end
 
 -- Dump to the terminal
