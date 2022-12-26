@@ -506,7 +506,7 @@ function _draw()
   end
 
   -- the player sprite
-  spr(6, w_px, 128 - w_py - w_ph + w_camy, wc_pw, wc_ph)
+  spr(16, w_px, 128 - w_py - w_ph + w_camy, wc_pw, wc_ph)
 
   if (gameover) then
     local score = highestlevel * 10
