@@ -123,6 +123,8 @@ local wc_maxlevelwidth = ceil(wc_towerwidth / 2)
 
 local easevx = nil
 
+local facing=1
+
 local last={
  t_t=t(),
  dir=0
@@ -306,6 +308,8 @@ function _update60()
     if (btnp(❎) and coll) then
       w_pay = max(w_jerky, abs(w_pvx) * 1.5)
     end
+
+    if (dir~=0 and dir~=facing) facing=dir
   end
 
   if (dir==0) then
@@ -506,7 +510,7 @@ function _draw()
   end
 
   -- the player sprite
-  spr(16, w_px, 128 - w_py - w_ph + w_camy, wc_pw, wc_ph)
+  spr(16, w_px, 128 - w_py - w_ph + w_camy, wc_pw, wc_ph, facing==-1)
 
   if (gameover) then
     local score = highestlevel * 10
