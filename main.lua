@@ -130,6 +130,10 @@ local last={
  dir=0
 }
 
+local wantstojump=false
+local jumpbuffer_len=4
+local jumpbuffer=0
+
 -- rndup(0,3) == 0
 -- rndup(1,3) == 3
 -- rndup(2,3) == 3
@@ -279,6 +283,13 @@ local function easer(
  end
 end
 
+function jump()
+  -- jump in proportion to horizontal velocity (to make big jumps across screen)
+  w_pay = max(w_jerky, abs(w_pvx) * 1.5)
+  wantstojump=false
+  jumpbuffer=0
+end
+
 function _init()
   init_dbg()
   -- Generate the first 2 screens worth of levels
@@ -298,18 +309,21 @@ function _update60()
   if (not gameover) then
     dir = btn(⬅️) and -1 or btn(➡️) and 1 or 0
 
-    -- TODO: Add a jerk (change in acceleration) while jump is held.
-    -- The jerk needs to decay while jump is held.
-    -- There's a constant gravity acting on the acceleration.
-    -- Therefore: The increase in acceleration initially cannot be overcome, but
-    -- as the jerk decays, the acceleration reaches zero, so the velocity slows
-    -- down, resulting in the the player falling back in the direction of
-    -- gravity.
-    if (btnp(❎) and coll) then
-      w_pay = max(w_jerky, abs(w_pvx) * 1.5)
+    if (btnp(❎)) then
+      if (coll) then
+        -- immediately jump
+        jump()
+      else
+        -- attempt to jump in the near future if character lands on a platform
+        wantstojump=true
+        jumpbuffer=jumpbuffer_len
+      end
+    elseif(coll and wantstojump and jumpbuffer > 0) then
+      -- trigger delayed jump
+      jump()
     end
 
-    if (dir~=0 and dir~=facing) facing=dir
+    facing = dir~=0 and dir or facing
   end
 
   if (dir==0) then
@@ -440,6 +454,7 @@ function _update60()
 
   last.t_t=t()
   last.dir=dir
+  jumpbuffer=max(0,jumpbuffer-1)
 end
 
 -- Dump to the terminal
