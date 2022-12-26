@@ -29,15 +29,16 @@ local w_pay = 0
 
 local w_pvx = 0
 local w_pvy = 0
-local w_maxvx = 3
+local w_maxvx = 2
 local w_maxvy = 10
 
 local w_px = 10
 local w_py = 17
 
-local w_ph = 16
-local w_pw = 16
+local w_ph = 8
+local w_pw = 8
 local wc_pw = w_pw / 8
+local wc_ph = w_ph / 8
 
 local w_camy = 0 -- Bottom of the map
 local w_camh = 128
@@ -289,14 +290,6 @@ function _update60()
 
   local dir = 0
 
-  -- Horizontal velocity always degrades in the opposite direction of motion
-  local w_dragx
-  if (coll) then
-    w_dragx = w_platformdragx
-  else
-    w_dragx = w_airdragx
-  end
-
   -- Vertical velocity always degrades in the downward direction
   w_pay = w_gravity
 
@@ -316,7 +309,7 @@ function _update60()
   end
 
   if (dir==0) then
-    if (last.dir~=0) then
+    if (dir~=last.dir) then
       -- start decelerating
       easevx = easer(
         easelinear,
@@ -335,7 +328,7 @@ function _update60()
         w_pvx,
         0,
         w_maxvx*dir,
-        framestosec(8)
+        framestosec(4)
       )
     end
   end
@@ -513,7 +506,7 @@ function _draw()
   end
 
   -- the player sprite
-  spr(4, w_px, 128 - w_py - w_ph + w_camy, 2, 2)
+  spr(6, w_px, 128 - w_py - w_ph + w_camy, wc_pw, wc_ph)
 
   if (gameover) then
     local score = highestlevel * 10
