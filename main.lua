@@ -510,7 +510,27 @@ function _draw()
   end
 
   -- the player sprite
-  spr(16, w_px, 128 - w_py - w_ph + w_camy, wc_pw, wc_ph, facing==-1)
+  -- todo: jet pack, wall slide
+  -- todo: animations
+  local sprnum=0
+  if (w_pvy==0) then
+    -- not jumping
+    if (w_pvx~=0) then
+      -- running
+      sprnum=20
+    else
+      -- idle
+      sprnum=16
+    end
+  elseif (w_pvy<0) then
+    -- falling
+    sprnum=26
+  else
+    -- jumping
+    sprnum=25
+  end
+
+  spr(sprnum, w_px, 128 - w_py - w_ph + w_camy, wc_pw, wc_ph, facing==-1)
 
   if (gameover) then
     local score = highestlevel * 10
