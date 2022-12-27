@@ -150,8 +150,6 @@ local function world_cell_to_map_celly(wc_y)
 end
 
 local function generate_levels(wc_y1, wc_y2)
-  -- zero-out the data
-  -- TODO: Use memcpy or something faster
   for wc_y=wc_y1, wc_y2 do
     -- convert from world coords to map coords
     local mc_y = world_cell_to_map_celly(wc_y)
@@ -163,9 +161,15 @@ local function generate_levels(wc_y1, wc_y2)
       mc_y -= mc_windowheight
     end
 
+    -- zero-out the data
+    -- TODO: Use memcpy or something faster
     for mc_x=0,mc_screenwidth do
       mset(mc_x, mc_y, 0)
     end
+
+    -- walls
+    mset(0, mc_y, 8)
+    mset(15, mc_y, 8)
   end
 
   -- Levels are every 3rd cell, so skip forward to the next cell that is a
@@ -187,10 +191,10 @@ local function generate_levels(wc_y1, wc_y2)
     local wc_levelwidth
     local wc_levelx
 
-    -- Every 50th level is full width
+    -- Every 50th level is full width (minus walls)
     if (level % 50 == 0) then
-      wc_levelwidth = mc_screenwidth
-      wc_levelx = 0
+      wc_levelwidth = mc_screenwidth - 2
+      wc_levelx = 1
     else
       -- otherwise it's a random width & position
       wc_levelwidth = wc_minlevelwidth + flr(rnd(wc_maxlevelwidth - wc_minlevelwidth  + 1))
@@ -419,8 +423,8 @@ function _update60()
     -- so, set t_wall_impact_at to the projected time, and also flag which way
     -- the wall is facing; we'll use that info later to figure out how the boom
     -- jump will work
-    if (w_px < 2 or w_px > 126 - w_pw) then
-      w_px = mid(2, w_px, 126 - w_pw)
+    if (w_px < 8 or w_px > 120 - w_pw) then
+      w_px = mid(8, w_px, 120 - w_pw)
     end
 
     -- Checking to see if rendering has moved into the top half of our generated
@@ -499,7 +503,8 @@ function _draw()
     local c_numberedx1 = 0
     local c_numberedx2 = 127
     -- todo: wont work when there's not a numbered level generated in the map yet
-    for mc_x=0,15 do
+    -- 1 -> 14 to ignore walls
+    for mc_x=1,14 do
       if mget(mc_x, mc_numberedypos) ~= 0 then
         c_numberedx1 = mc_x * 8
         for mc_x=mc_x,15 do
