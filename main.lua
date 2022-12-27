@@ -127,12 +127,14 @@ local facing=1
 
 local last={
  t_t=t(),
- dir=0
+ dir=0,
 }
 
-local wantstojump=false
 local jumpbuffer_len=4
 local jumpbuffer=0
+
+local coyote_len=6
+local coyote_time=0
 
 -- rndup(0,3) == 0
 -- rndup(1,3) == 3
@@ -290,8 +292,16 @@ end
 function jump()
   -- jump in proportion to horizontal velocity (to make big jumps across screen)
   w_pay = max(w_jerky, abs(w_pvx) * 1.5)
-  wantstojump=false
   jumpbuffer=0
+  coyote_time=0
+end
+
+function handlecoll()
+  -- Move back to the top of the platform
+  w_py += (8 - (w_py % 8)) - 1
+  w_pvy = 0
+  -- Floors are rendered every 3rd map tile, hence the division by 3
+  highestlevel = flr(w_py / 8) / 3
 end
 
 function _init()
@@ -305,25 +315,25 @@ function _update60()
 
   local dt_t=t()-last.t_t
 
-  local dir = 0
-
   -- Vertical velocity always degrades in the downward direction
   w_pay = w_gravity
+
+  local dir = 0
 
   if (not gameover) then
     dir = btn(⬅️) and -1 or btn(➡️) and 1 or 0
 
     if (btnp(❎)) then
-      if (coll) then
-        -- immediately jump
-        jump()
-      else
-        -- attempt to jump in the near future if character lands on a platform
-        wantstojump=true
-        jumpbuffer=jumpbuffer_len
-      end
-    elseif(coll and wantstojump and jumpbuffer > 0) then
-      -- trigger delayed jump
+      -- attempt to jump in the near future if character lands on a platform
+      jumpbuffer=jumpbuffer_len
+    end
+
+    if (coll) then
+      coyote_time=coyote_len
+    end
+
+    if (jumpbuffer > 0 and coyote_time > 0) then
+      -- trigger a (possibly delayed) jump
       jump()
     end
 
@@ -392,27 +402,27 @@ function _update60()
 
     coll = false
 
-    -- Use map data to check for collision with platforms
-    -- Only when player is moving downward
-    if (w_pvy < 0) then
-      local wc_y = flr(w_py / 8)
-      local wc_x1 = flr(w_px / 8)
-      local wc_x2 = wc_x1 + wc_pw
-      local mc_y = world_cell_to_map_celly(wc_y)
+    if (coyote_time > 0) then
+      handlecoll()
+    else
+      -- Use map data to check for collision with platforms
+      -- Only when player is moving downward
+      if (w_pvy < 0) then
+        local wc_y = flr(w_py / 8)
+        local wc_x1 = flr(w_px / 8)
+        local wc_x2 = flr((w_px + w_pw - 1) / 8)
+        local mc_y = world_cell_to_map_celly(wc_y)
 
-      for mc_x = wc_x1, wc_x2 do
-        local mapspr = mget(mc_x, mc_y)
-        local isplatform = fget(mapspr, 0)
+        for mc_x = wc_x1, wc_x2 do
+          local mapspr = mget(mc_x, mc_y)
+          local isplatform = fget(mapspr, 0)
 
-        if (isplatform) then
-          -- This is a hacky calculation. Can the levels themsleves hold this
-          -- information?
-          coll =true
-          -- Move back to the top of the platform
-          w_py += (8 - (w_py % 8)) - 1
-          w_pvy = 0
-          -- Floors are rendered every 3rd map tile, hence the division by 3
-          highestlevel = flr(w_py / 8) / 3
+          if (isplatform) then
+            -- This is a hacky calculation. Can the levels themsleves hold this
+            -- information?
+            coll=true
+            handlecoll()
+          end
         end
       end
     end
@@ -459,6 +469,7 @@ function _update60()
   last.t_t=t()
   last.dir=dir
   jumpbuffer=max(0,jumpbuffer-1)
+  coyote_time=max(0,coyote_time-1)
 end
 
 -- Dump to the terminal
